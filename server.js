@@ -12,40 +12,18 @@ const REDIS_PORT = process.env.REDIS_PORT || 6379;
 
 const redis = new Redis({
   host: REDIS_HOST,
-  port: REDIS_PORT,
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  lazyConnect: true
+  port: REDIS_PORT
 });
 
-// Error handling
-redis.on('error', (err) => {
-  console.error('Redis connection error:', err);
-});
-
-redis.on('connect', () => {
-  console.log('Connected to Redis');
-});
-
-redis.on('ready', () => {
-  console.log('Redis is ready');
-  // Subscribe to all channels
-  redis.psubscribe('*', (err, count) => {
-    if (err) console.error('Failed to subscribe: ', err);
-    else console.log(`Subscribed to ${count} pattern(s)`);
-  });
+// Subscribe to all channels
+redis.psubscribe('*', (err, count) => {
+  if (err) console.error('Failed to subscribe: ', err);
+  else console.log(`Subscribed to ${count} pattern(s)`);
 });
 
 redis.on('pmessage', (pattern, channel, message) => {
   // Send to all connected clients
   io.emit('redis-message', { channel, message });
-});
-
-// Connect to Redis
-redis.connect().catch((err) => {
-  console.error('Failed to connect to Redis:', err);
 });
 
 // Serve HTML
