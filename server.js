@@ -16,7 +16,7 @@ const redis = new Redis({
 });
 
 // Subscribe to all channels
-redis.psubscribe('*', (err, count) => {
+redis.psubscribe('c6c3_228.*', (err, count) => {
   if (err) console.error('Failed to subscribe: ', err);
   else console.log(`Subscribed to ${count} pattern(s)`);
 });
