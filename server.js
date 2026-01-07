@@ -29,5 +29,5 @@ redis.on('pmessage', (pattern, channel, message) => {
 // Serve HTML
 app.use(express.static('public'));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Web server running on port ${PORT}`));
