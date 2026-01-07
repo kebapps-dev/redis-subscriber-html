@@ -7,20 +7,36 @@
 <style>
   body { font-family: monospace; padding: 20px; }
   .channel { margin-bottom: 10px; }
-  .controls { margin-bottom: 20px; }
+  .controls { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; }
   input { padding: 5px; font-family: monospace; width: 300px; }
-  button { padding: 5px 15px; cursor: pointer; }
+  textarea { padding: 5px; font-family: monospace; width: 100%; min-height: 100px; }
+  button { padding: 5px 15px; cursor: pointer; margin-right: 5px; }
   .status { margin-top: 10px; color: green; }
+  .section { margin-bottom: 15px; }
+  label { display: block; margin-bottom: 5px; font-weight: bold; }
 </style>
 </head>
 <body>
 <h1>Redis Subscriber 4</h1>
+
 <div class="controls">
-  <label for="pattern">Subscription Pattern:</label>
-  <input type="text" id="pattern" value="*" placeholder="e.g., c6c3_228.* or *">
-  <button id="subscribe">Subscribe</button>
+  <div class="section">
+    <label for="pattern">Subscription Pattern:</label>
+    <input type="text" id="pattern" value="*" placeholder="e.g., c6c3_228.* or *">
+    <button id="subscribe-pattern">Subscribe Pattern</button>
+  </div>
+  
+  <!-- KEB Protocol Section (optional) -->
+  <div class="section keb-nodes">
+    <label for="nodes">KEB Nodes (one per line):</label>
+    <textarea id="nodes" placeholder="c6c3_228.Application.PLC_PRG.Combivis_DINT
+c3_colin.Application.GVL_APP.X1_HMI.SysDateTime"></textarea>
+    <button id="subscribe-nodes">Subscribe Nodes</button>
+  </div>
+  
   <div class="status" id="status"></div>
 </div>
+
 <div id="messages"></div>
 
 <script>
@@ -37,12 +53,13 @@
     document.getElementById('status').textContent = `Status: ${status} - Pattern: ${pattern}`;
   });
 
-  document.getElementById('subscribe').addEventListener('click', () => {
+  // Pattern subscription
+  document.getElementById('subscribe-pattern').addEventListener('click', () => {
     const pattern = document.getElementById('pattern').value || '*';
     socket.emit('change-pattern', pattern);
   });
 
-  // Request current pattern on load
+  // Request current state on load
   socket.on('connect', () => {
     socket.emit('get-current-pattern');
   });
@@ -51,6 +68,39 @@
     document.getElementById('pattern').value = pattern;
     document.getElementById('status').textContent = `Status: Subscribed - Pattern: ${pattern}`;
   });
+
+  // ============================================================================
+  // OPTIONAL: KEB Protocol Client Code
+  // ============================================================================
+  let kebProtocolEnabled = false;
+
+  socket.on('keb-protocol-enabled', (enabled) => {
+    kebProtocolEnabled = enabled;
+    // Show/hide KEB section based on server support
+    const kebSection = document.querySelector('.section.keb-nodes');
+    if (kebSection) {
+      kebSection.style.display = enabled ? 'block' : 'none';
+    }
+  });
+
+  // KEB node subscription
+  document.getElementById('subscribe-nodes').addEventListener('click', () => {
+    if (!kebProtocolEnabled) return;
+    const nodesText = document.getElementById('nodes').value;
+    const nodes = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+    if (nodes.length > 0) {
+      socket.emit('subscribe-nodes', nodes);
+    }
+  });
+
+  socket.on('subscribed-nodes', (nodes) => {
+    if (nodes.length > 0) {
+      document.getElementById('nodes').value = nodes.join('\n');
+    }
+  });
+  // ============================================================================
+  // END KEB PROTOCOL CLIENT CODE
+  // ============================================================================
 </script>
 </body>
 </html>

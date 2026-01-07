@@ -3,6 +3,13 @@ const http = require('http');
 const { Server } = require('socket.io');
 const Redis = require('ioredis');
 
+// ============================================================================
+// OPTIONAL: Enable KEB Protocol Support
+// Comment out or remove this line to disable KEB-specific functionality
+// ============================================================================
+const KebProtocol = require('./keb-protocol');
+// ============================================================================
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -10,12 +17,19 @@ const io = new Server(server);
 const REDIS_HOST = process.env.REDIS_HOST || 'redis';
 const REDIS_PORT = process.env.REDIS_PORT || 6379;
 
+// Main Redis client for subscribing
 const redis = new Redis({
   host: REDIS_HOST,
   port: REDIS_PORT
 });
 
 let currentPattern = '*';
+let kebProtocol = null;
+
+// Initialize KEB Protocol if available
+if (typeof KebProtocol !== 'undefined') {
+  kebProtocol = new KebProtocol(REDIS_HOST, REDIS_PORT);
+}
 
 // Subscribe to all channels initially
 redis.psubscribe(currentPattern, (err, count) => {
@@ -35,6 +49,11 @@ io.on('connection', (socket) => {
   // Send current pattern to new clients
   socket.on('get-current-pattern', () => {
     socket.emit('current-pattern', currentPattern);
+    
+    // Register KEB protocol handlers if enabled
+    if (kebProtocol) {
+      kebProtocol.registerSocketHandlers(io, socket);
+    }
   });
   
   // Handle pattern changes
