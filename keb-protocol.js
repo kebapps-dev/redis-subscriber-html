@@ -12,8 +12,15 @@ class KebProtocol {
       port: redisPort
     });
     
+    // Separate client for discovery responses
+    this.redisDiscovery = new Redis({
+      host: redisHost,
+      port: redisPort
+    });
+    
     this.subscribedNodes = [];
     this.subscriptionId = this.generateId();
+    this.discoveredNodes = [];
     
     console.log('KEB Protocol enabled with ID:', this.subscriptionId);
   }
@@ -24,6 +31,76 @@ class KebProtocol {
       const v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
+  }
+  
+  /**
+   * Discover available KEB nodes
+   */
+  async discoverNodes() {
+    return new Promise((resolve, reject) => {
+      const responseTopic = `keb_${Date.now()}`;
+      this.discoveredNodes = [];
+      
+      // Subscribe to response topic
+      this.redisDiscovery.subscribe(responseTopic, (err) => {
+        if (err) {
+          console.error('Failed to subscribe to discovery response:', err);
+          reject(err);
+          return;
+        }
+        
+        console.log(`Subscribed to discovery response topic: ${responseTopic}`);
+        
+        // Set timeout for discovery
+        const timeout = setTimeout(() => {
+          this.redisDiscovery.unsubscribe(responseTopic);
+          resolve(this.discoveredNodes);
+        }, 2000); // Wait 2 seconds for responses
+        
+        // Handle discovery responses
+        this.redisDiscovery.on('message', (channel, message) => {
+          if (channel === responseTopic) {
+            try {
+              const data = JSON.parse(message);
+              if (data.nodes && Array.isArray(data.nodes)) {
+                data.nodes.forEach(node => {
+                  if (node.nodeTopic) {
+                    this.discoveredNodes.push(node.nodeTopic);
+                  }
+                });
+                console.log(`Discovered ${data.nodes.length} nodes`);
+              }
+            } catch (err) {
+              console.error('Failed to parse discovery response:', err);
+            }
+          }
+        });
+        
+        // Publish discovery request
+        const discoveryMessage = JSON.stringify({
+          requestId: responseTopic,
+          action: 'browse',
+          responseTopic: responseTopic
+        });
+        
+        this.redisPublisher.publish('$kebDiscovery', discoveryMessage)
+          .then(() => {
+            console.log(`Published to $kebDiscovery:`, discoveryMessage);
+          })
+          .catch((err) => {
+            clearTimeout(timeout);
+            this.redisDiscovery.unsubscribe(responseTopic);
+            reject(err);
+          });
+      });
+    });
+  }
+  
+  /**
+   * Get discovered nodes
+   */
+  getDiscoveredNodes() {
+    return this.discoveredNodes;
   }
   
   /**
@@ -57,7 +134,30 @@ class KebProtocol {
   registerSocketHandlers(io, socket) {
     // Send subscribed nodes to new clients
     socket.emit('subscribed-nodes', this.subscribedNodes);
+    socket.emit('discovered-nodes', this.discoveredNodes);
     socket.emit('keb-protocol-enabled', true);
+    
+    // Handle discovery requests
+    socket.on('discover-nodes', async () => {
+      try {
+        const nodes = await this.discoverNodes();
+        
+        console.log(`Discovery complete: ${nodes.length} nodes found`);
+        
+        // Notify all clients
+        io.emit('discovered-nodes', nodes);
+        io.emit('subscription-status', {
+          pattern: '*',
+          status: `Discovered ${nodes.length} nodes`
+        });
+      } catch (err) {
+        console.error('Failed to discover nodes:', err);
+        socket.emit('subscription-status', {
+          pattern: '*',
+          status: 'Discovery error: ' + err.message
+        });
+      }
+    });
     
     // Handle node subscription requests
     socket.on('subscribe-nodes', async (nodes) => {
@@ -87,6 +187,9 @@ class KebProtocol {
   async close() {
     if (this.redisPublisher) {
       await this.redisPublisher.quit();
+    }
+    if (this.redisDiscovery) {
+      await this.redisDiscovery.quit();
     }
   }
 }

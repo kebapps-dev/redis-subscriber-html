@@ -28,9 +28,12 @@
   
   <!-- KEB Protocol Section (optional) -->
   <div class="section keb-nodes">
-    <label for="nodes">KEB Nodes (one per line):</label>
-    <textarea id="nodes" placeholder="c6c3_228.Application.PLC_PRG.Combivis_DINT
-c3_colin.Application.GVL_APP.X1_HMI.SysDateTime"></textarea>
+    <label>KEB Node Discovery:</label>
+    <button id="discover-nodes">Discover Nodes</button>
+    <div id="discovered-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; display: none;"></div>
+    
+    <label for="nodes" style="margin-top: 15px;">Selected Nodes (one per line):</label>
+    <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then select from the list above"></textarea>
     <button id="subscribe-nodes">Subscribe Nodes</button>
   </div>
   
@@ -73,6 +76,7 @@ c3_colin.Application.GVL_APP.X1_HMI.SysDateTime"></textarea>
   // OPTIONAL: KEB Protocol Client Code
   // ============================================================================
   let kebProtocolEnabled = false;
+  let discoveredNodes = [];
 
   socket.on('keb-protocol-enabled', (enabled) => {
     kebProtocolEnabled = enabled;
@@ -81,6 +85,48 @@ c3_colin.Application.GVL_APP.X1_HMI.SysDateTime"></textarea>
     if (kebSection) {
       kebSection.style.display = enabled ? 'block' : 'none';
     }
+  });
+
+  // Handle node discovery
+  document.getElementById('discover-nodes').addEventListener('click', () => {
+    if (!kebProtocolEnabled) return;
+    socket.emit('discover-nodes');
+  });
+
+  socket.on('discovered-nodes', (nodes) => {
+    discoveredNodes = nodes;
+    const listDiv = document.getElementById('discovered-list');
+    
+    if (nodes.length === 0) {
+      listDiv.style.display = 'none';
+      return;
+    }
+    
+    listDiv.style.display = 'block';
+    listDiv.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Click nodes to add:</div>';
+    
+    nodes.forEach(node => {
+      const nodeDiv = document.createElement('div');
+      nodeDiv.textContent = node;
+      nodeDiv.style.cursor = 'pointer';
+      nodeDiv.style.padding = '3px';
+      nodeDiv.style.borderBottom = '1px solid #eee';
+      nodeDiv.addEventListener('click', () => {
+        const currentNodes = document.getElementById('nodes').value;
+        const nodeList = currentNodes ? currentNodes.split('\n') : [];
+        if (!nodeList.includes(node)) {
+          nodeList.push(node);
+          document.getElementById('nodes').value = nodeList.join('\n');
+        }
+      });
+      nodeDiv.addEventListener('mouseenter', () => {
+        nodeDiv.style.backgroundColor = '#e0e0e0';
+      });
+      nodeDiv.addEventListener('mouseleave', () => {
+        nodeDiv.style.backgroundColor = 'transparent';
+      });
+      listDiv.appendChild(nodeDiv);
+    });
   });
 
   // KEB node subscription
