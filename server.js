@@ -15,15 +15,57 @@ const redis = new Redis({
   port: REDIS_PORT
 });
 
-// Subscribe to all channels under c6c3_228.*
-redis.psubscribe('c6c3_228.*', (err, count) => {
+let currentPattern = '*';
+
+// Subscribe to all channels initially
+redis.psubscribe(currentPattern, (err, count) => {
   if (err) console.error('Failed to subscribe: ', err);
-  else console.log(`Subscribed to ${count} pattern(s)`);
+  else console.log(`Subscribed to ${count} pattern(s): ${currentPattern}`);
 });
 
 redis.on('pmessage', (pattern, channel, message) => {
   // Send to all connected clients
   io.emit('redis-message', { channel, message });
+});
+
+// Handle client connections
+io.on('connection', (socket) => {
+  console.log('Client connected');
+  
+  // Send current pattern to new clients
+  socket.on('get-current-pattern', () => {
+    socket.emit('current-pattern', currentPattern);
+  });
+  
+  // Handle pattern changes
+  socket.on('change-pattern', async (newPattern) => {
+    try {
+      // Unsubscribe from old pattern
+      await redis.punsubscribe(currentPattern);
+      
+      // Subscribe to new pattern
+      currentPattern = newPattern || '*';
+      await redis.psubscribe(currentPattern);
+      
+      console.log(`Pattern changed to: ${currentPattern}`);
+      
+      // Notify all clients
+      io.emit('subscription-status', {
+        pattern: currentPattern,
+        status: 'Subscribed'
+      });
+    } catch (err) {
+      console.error('Failed to change pattern:', err);
+      socket.emit('subscription-status', {
+        pattern: currentPattern,
+        status: 'Error: ' + err.message
+      });
+    }
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
 });
 
 // Serve HTML

@@ -7,10 +7,20 @@
 <style>
   body { font-family: monospace; padding: 20px; }
   .channel { margin-bottom: 10px; }
+  .controls { margin-bottom: 20px; }
+  input { padding: 5px; font-family: monospace; width: 300px; }
+  button { padding: 5px 15px; cursor: pointer; }
+  .status { margin-top: 10px; color: green; }
 </style>
 </head>
 <body>
 <h1>Redis Subscriber 4</h1>
+<div class="controls">
+  <label for="pattern">Subscription Pattern:</label>
+  <input type="text" id="pattern" value="*" placeholder="e.g., c6c3_228.* or *">
+  <button id="subscribe">Subscribe</button>
+  <div class="status" id="status"></div>
+</div>
 <div id="messages"></div>
 
 <script>
@@ -21,6 +31,25 @@
     div.className = 'channel';
     div.textContent = `${channel} : ${message}`;
     document.getElementById('messages').prepend(div);
+  });
+
+  socket.on('subscription-status', ({ pattern, status }) => {
+    document.getElementById('status').textContent = `Status: ${status} - Pattern: ${pattern}`;
+  });
+
+  document.getElementById('subscribe').addEventListener('click', () => {
+    const pattern = document.getElementById('pattern').value || '*';
+    socket.emit('change-pattern', pattern);
+  });
+
+  // Request current pattern on load
+  socket.on('connect', () => {
+    socket.emit('get-current-pattern');
+  });
+
+  socket.on('current-pattern', (pattern) => {
+    document.getElementById('pattern').value = pattern;
+    document.getElementById('status').textContent = `Status: Subscribed - Pattern: ${pattern}`;
   });
 </script>
 </body>
