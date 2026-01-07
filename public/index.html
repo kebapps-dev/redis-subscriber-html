@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Redis Subscriber</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body { font-family: monospace; padding: 20px; }
+  .channel { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Redis Subscriber</h1>
+<div id="messages"></div>
+
+<script>
+  const socket = io();
+
+  socket.on('redis-message', ({ channel, message }) => {
+    const div = document.createElement('div');
+    div.className = 'channel';
+    div.textContent = `${channel} : ${message}`;
+    document.getElementById('messages').prepend(div);
+  });
+</script>
+</body>
+</html>
