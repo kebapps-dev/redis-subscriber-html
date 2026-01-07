@@ -6,6 +6,7 @@ COPY package.json ./
 RUN npm install --omit=dev
 
 COPY server.js ./ 
+COPY keb-protocol.js ./
 COPY public ./public
 
 EXPOSE 3001
