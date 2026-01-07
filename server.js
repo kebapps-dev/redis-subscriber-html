@@ -15,8 +15,8 @@ const redis = new Redis({
   port: REDIS_PORT
 });
 
-// Subscribe to all channels under c6c3_228.*
-redis.psubscribe('c6c3_228.*', (err, count) => {
+// Subscribe to all channels
+redis.psubscribe('*', (err, count) => {
   if (err) console.error('Failed to subscribe: ', err);
   else console.log(`Subscribed to ${count} pattern(s)`);
 });
@@ -29,5 +29,5 @@ redis.on('pmessage', (pattern, channel, message) => {
 // Serve HTML
 app.use(express.static('public'));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Web server running on port ${PORT}`));
