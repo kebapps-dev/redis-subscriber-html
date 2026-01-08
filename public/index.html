@@ -96,6 +96,7 @@
     <label for="nodes" style="margin-top: 15px;">Selected Nodes (one per line):</label>
     <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then select from the list above"></textarea>
     <button id="subscribe-nodes">Subscribe Nodes</button>
+    <button id="clear-nodes">Clear All Nodes</button>
   </div>
   
   <div class="status" id="status"></div>
@@ -354,6 +355,13 @@
       document.getElementById('nodes').value = nodes.join('\n');
       renderNodeValues();
     }
+  });
+  
+  // Clear nodes button
+  document.getElementById('clear-nodes').addEventListener('click', () => {
+    document.getElementById('nodes').value = '';
+    Object.keys(nodeValues).forEach(key => delete nodeValues[key]);
+    renderNodeValues();
   });
   // ============================================================================
   // END KEB PROTOCOL CLIENT CODE
