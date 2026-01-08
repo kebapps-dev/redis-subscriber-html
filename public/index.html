@@ -14,6 +14,44 @@
   .status { margin-top: 10px; color: green; }
   .section { margin-bottom: 15px; }
   label { display: block; margin-bottom: 5px; font-weight: bold; }
+  
+  /* Two-column layout */
+  .messages-container { display: flex; gap: 20px; }
+  .node-values { 
+    flex: 1; 
+    border: 1px solid #ccc; 
+    padding: 10px; 
+    max-height: 600px; 
+    overflow-y: auto;
+  }
+  .activity-log { 
+    flex: 1; 
+    border: 1px solid #ccc; 
+    padding: 10px; 
+    max-height: 600px; 
+    overflow-y: auto;
+  }
+  .column-header { 
+    font-weight: bold; 
+    font-size: 16px; 
+    margin-bottom: 10px; 
+    padding-bottom: 5px; 
+    border-bottom: 2px solid #333;
+  }
+  .node-item {
+    margin-bottom: 8px;
+    padding: 5px;
+    background: #f5f5f5;
+    border-left: 3px solid #4CAF50;
+  }
+  .node-name {
+    font-weight: bold;
+    color: #333;
+  }
+  .node-value {
+    color: #0066cc;
+    margin-left: 10px;
+  }
 </style>
 </head>
 <body>
@@ -40,17 +78,73 @@
   <div class="status" id="status"></div>
 </div>
 
-<div id="messages"></div>
+<div class="messages-container">
+  <div class="node-values">
+    <div class="column-header">Subscribed Node Values</div>
+    <div id="node-values-list"></div>
+  </div>
+  
+  <div class="activity-log">
+    <div class="column-header">Activity Log</div>
+    <div id="messages"></div>
+  </div>
+</div>
 
 <script>
   const socket = io();
+  const nodeValues = {}; // Track current values of subscribed nodes
 
   socket.on('redis-message', ({ channel, message }) => {
+    // Update activity log (right column)
     const div = document.createElement('div');
     div.className = 'channel';
     div.textContent = `${channel} : ${message}`;
     document.getElementById('messages').prepend(div);
+    
+    // Update node values display (left column) if this is a subscribed node
+    updateNodeValue(channel, message);
   });
+  
+  function updateNodeValue(channel, message) {
+    // Check if this channel matches any subscribed nodes
+    const nodesText = document.getElementById('nodes').value;
+    const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+    
+    if (subscribedNodesList.includes(channel)) {
+      nodeValues[channel] = message;
+      renderNodeValues();
+    }
+  }
+  
+  function renderNodeValues() {
+    const container = document.getElementById('node-values-list');
+    container.innerHTML = '';
+    
+    const nodesText = document.getElementById('nodes').value;
+    const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+    
+    if (subscribedNodesList.length === 0) {
+      container.innerHTML = '<div style="color: #999;">No nodes subscribed</div>';
+      return;
+    }
+    
+    subscribedNodesList.forEach(node => {
+      const nodeDiv = document.createElement('div');
+      nodeDiv.className = 'node-item';
+      
+      const nameSpan = document.createElement('div');
+      nameSpan.className = 'node-name';
+      nameSpan.textContent = node;
+      
+      const valueSpan = document.createElement('div');
+      valueSpan.className = 'node-value';
+      valueSpan.textContent = nodeValues[node] || 'waiting for data...';
+      
+      nodeDiv.appendChild(nameSpan);
+      nodeDiv.appendChild(valueSpan);
+      container.appendChild(nodeDiv);
+    });
+  }
 
   socket.on('subscription-status', ({ pattern, status }) => {
     document.getElementById('status').textContent = `Status: ${status} - Pattern: ${pattern}`;
@@ -136,12 +230,16 @@
     const nodes = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
     if (nodes.length > 0) {
       socket.emit('subscribe-nodes', nodes);
+      // Clear old values and re-render
+      Object.keys(nodeValues).forEach(key => delete nodeValues[key]);
+      renderNodeValues();
     }
   });
 
   socket.on('subscribed-nodes', (nodes) => {
     if (nodes.length > 0) {
       document.getElementById('nodes').value = nodes.join('\n');
+      renderNodeValues();
     }
   });
   // ============================================================================
