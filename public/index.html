@@ -52,6 +52,29 @@
     color: #0066cc;
     margin-left: 10px;
   }
+  
+  /* Tree view styles */
+  .tree-container { font-family: monospace; }
+  .tree-item { margin-left: 15px; }
+  .tree-folder { 
+    cursor: pointer; 
+    padding: 3px; 
+    user-select: none;
+  }
+  .tree-folder:hover { background-color: #e0e0e0; }
+  .tree-leaf { 
+    cursor: pointer; 
+    padding: 3px; 
+    color: #0066cc;
+  }
+  .tree-leaf:hover { background-color: #d0e8ff; }
+  .folder-icon { 
+    display: inline-block; 
+    width: 12px; 
+    margin-right: 3px;
+    font-weight: bold;
+  }
+  .collapsed { display: none; }
 </style>
 </head>
 <body>
@@ -197,31 +220,121 @@
     }
     
     listDiv.style.display = 'block';
-    listDiv.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Click nodes to add:</div>';
+    listDiv.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Click nodes to add (double-click folders to add all):</div>';
+    
+    // Build tree structure
+    const tree = buildTree(nodes);
+    const treeContainer = document.createElement('div');
+    treeContainer.className = 'tree-container';
+    renderTree(tree, treeContainer, '');
+    listDiv.appendChild(treeContainer);
+  });
+  
+  function buildTree(nodes) {
+    const tree = {};
     
     nodes.forEach(node => {
-      const nodeDiv = document.createElement('div');
-      nodeDiv.textContent = node;
-      nodeDiv.style.cursor = 'pointer';
-      nodeDiv.style.padding = '3px';
-      nodeDiv.style.borderBottom = '1px solid #eee';
-      nodeDiv.addEventListener('click', () => {
-        const currentNodes = document.getElementById('nodes').value;
-        const nodeList = currentNodes ? currentNodes.split('\n') : [];
-        if (!nodeList.includes(node)) {
-          nodeList.push(node);
-          document.getElementById('nodes').value = nodeList.join('\n');
+      const parts = node.split('.');
+      let current = tree;
+      
+      parts.forEach((part, index) => {
+        if (!current[part]) {
+          current[part] = {
+            _isLeaf: index === parts.length - 1,
+            _fullPath: index === parts.length - 1 ? node : null
+          };
+        }
+        if (index < parts.length - 1) {
+          current = current[part];
         }
       });
-      nodeDiv.addEventListener('mouseenter', () => {
-        nodeDiv.style.backgroundColor = '#e0e0e0';
-      });
-      nodeDiv.addEventListener('mouseleave', () => {
-        nodeDiv.style.backgroundColor = 'transparent';
-      });
-      listDiv.appendChild(nodeDiv);
     });
-  });
+    
+    return tree;
+  }
+  
+  function renderTree(tree, container, parentPath) {
+    Object.keys(tree).forEach(key => {
+      if (key.startsWith('_')) return; // Skip metadata keys
+      
+      const node = tree[key];
+      const currentPath = parentPath ? `${parentPath}.${key}` : key;
+      
+      if (node._isLeaf) {
+        // Leaf node - single click to add
+        const leafDiv = document.createElement('div');
+        leafDiv.className = 'tree-leaf';
+        leafDiv.textContent = key;
+        leafDiv.title = node._fullPath;
+        leafDiv.addEventListener('click', () => {
+          addNodeToSubscription(node._fullPath);
+        });
+        container.appendChild(leafDiv);
+      } else {
+        // Folder node
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'tree-folder';
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'folder-icon';
+        iconSpan.textContent = '▶';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = key;
+        
+        folderDiv.appendChild(iconSpan);
+        folderDiv.appendChild(nameSpan);
+        
+        const childContainer = document.createElement('div');
+        childContainer.className = 'tree-item collapsed';
+        
+        // Single click to toggle expand/collapse
+        folderDiv.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isCollapsed = childContainer.classList.contains('collapsed');
+          childContainer.classList.toggle('collapsed');
+          iconSpan.textContent = isCollapsed ? '▼' : '▶';
+        });
+        
+        // Double click to add all leaf nodes in this folder
+        folderDiv.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          const leafNodes = getAllLeafNodes(node);
+          leafNodes.forEach(leafPath => addNodeToSubscription(leafPath));
+        });
+        
+        container.appendChild(folderDiv);
+        renderTree(node, childContainer, currentPath);
+        container.appendChild(childContainer);
+      }
+    });
+  }
+  
+  function getAllLeafNodes(tree) {
+    const leaves = [];
+    
+    function traverse(obj) {
+      Object.keys(obj).forEach(key => {
+        if (key === '_fullPath' && obj[key]) {
+          leaves.push(obj[key]);
+        } else if (typeof obj[key] === 'object' && !key.startsWith('_')) {
+          traverse(obj[key]);
+        }
+      });
+    }
+    
+    traverse(tree);
+    return leaves;
+  }
+  
+  function addNodeToSubscription(nodePath) {
+    const currentNodes = document.getElementById('nodes').value;
+    const nodeList = currentNodes ? currentNodes.split('\n') : [];
+    if (!nodeList.includes(nodePath)) {
+      nodeList.push(nodePath);
+      document.getElementById('nodes').value = nodeList.join('\n');
+    }
+  }
 
   // KEB node subscription
   document.getElementById('subscribe-nodes').addEventListener('click', () => {
