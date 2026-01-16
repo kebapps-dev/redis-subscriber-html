@@ -236,21 +236,43 @@
     const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
     
     if (subscribedNodesList.includes(channel)) {
-      // Store the request ID from the response
+      // Parse and extract value
       try {
         const data = JSON.parse(message);
-        if (data.requestId) {
-          nodeRequestIds[channel] = data.requestId;
+        
+        // Format 1: {"value": X} - simple value update
+        if (data.value !== undefined) {
+          nodeValues[channel] = data.value;
         }
-        // Extract the actual value from the result object
-        if (data.result && data.result[channel] !== undefined) {
-          nodeValues[channel] = data.result[channel];
+        // Format 2: {"requestId":"...", "result":{nodeName: value}} - response with requestId
+        else if (data.requestId && data.result) {
+          nodeRequestIds[channel] = data.requestId;
+          if (data.result[channel] !== undefined) {
+            nodeValues[channel] = data.result[channel];
+          }
         }
       } catch (e) {
         // If not JSON, just store the raw message
         nodeValues[channel] = message;
       }
       renderNodeValues();
+    }
+    
+    // Also check if this is a UUID channel with requestId format
+    try {
+      const data = JSON.parse(message);
+      if (data.requestId && data.result) {
+        // Store requestId for all nodes in the result
+        Object.keys(data.result).forEach(nodeName => {
+          if (subscribedNodesList.includes(nodeName)) {
+            nodeRequestIds[nodeName] = data.requestId;
+            nodeValues[nodeName] = data.result[nodeName];
+          }
+        });
+        renderNodeValues();
+      }
+    } catch (e) {
+      // Not a valid JSON or UUID format, ignore
     }
   }
   
