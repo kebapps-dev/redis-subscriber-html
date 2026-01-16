@@ -231,6 +231,7 @@
   const nodeValues = {}; // Track current values of subscribed nodes
   const nodeRequestIds = {}; // Track request IDs for each node
   const expandedFolders = new Set(); // Track which folders are expanded
+  let lastRenderedNodes = ''; // Track when we need to rebuild the tree
 
   socket.on('redis-message', ({ channel, message }) => {
     // Update activity log (right column)
@@ -291,22 +292,83 @@
   
   function renderNodeValues() {
     const container = document.getElementById('node-values-list');
-    container.innerHTML = '';
-    
     const nodesText = document.getElementById('nodes').value;
     const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
     
     if (subscribedNodesList.length === 0) {
       container.innerHTML = '<div style="color: #999;">No nodes subscribed</div>';
+      lastRenderedNodes = '';
       return;
     }
     
-    // Build tree structure from subscribed nodes
-    const tree = buildTree(subscribedNodesList);
-    const treeContainer = document.createElement('div');
-    treeContainer.className = 'tree-container';
-    renderNodeValueTree(tree, treeContainer, '');
-    container.appendChild(treeContainer);
+    // Only rebuild tree if the node list has changed
+    if (lastRenderedNodes !== nodesText) {
+      container.innerHTML = '';
+      lastRenderedNodes = nodesText;
+      
+      // Build tree structure from subscribed nodes
+      const tree = buildTree(subscribedNodesList);
+      const treeContainer = document.createElement('div');
+      treeContainer.className = 'tree-container';
+      renderNodeValueTree(tree, treeContainer, '');
+      container.appendChild(treeContainer);
+    } else {
+      // Just update the values without rebuilding the tree
+      updateNodeValuesInTree();
+    }
+  }
+  
+  function updateNodeValuesInTree() {
+    // Update all node values in the existing tree structure
+    const container = document.getElementById('node-values-list');
+    const nodesText = document.getElementById('nodes').value;
+    const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+    
+    subscribedNodesList.forEach(nodePath => {
+      // Find the node item div for this node
+      const nodeItems = container.querySelectorAll('.node-item');
+      nodeItems.forEach(item => {
+        const nameSpan = item.querySelector('.node-name');
+        if (nameSpan && nameSpan.textContent === nodePath) {
+          // Update value
+          const valueSpan = item.querySelector('.node-value');
+          if (valueSpan) {
+            const displayValue = nodeValues[nodePath] !== undefined ? nodeValues[nodePath] : 'waiting for data...';
+            valueSpan.textContent = `Value: ${displayValue}`;
+          }
+          
+          // Update or add request ID
+          let requestIdSpan = item.querySelector('[style*="font-size: 11px"]');
+          if (nodeRequestIds[nodePath]) {
+            if (requestIdSpan) {
+              requestIdSpan.textContent = `Request ID: ${nodeRequestIds[nodePath]}`;
+            } else {
+              requestIdSpan = document.createElement('div');
+              requestIdSpan.style.fontSize = '11px';
+              requestIdSpan.style.color = '#666';
+              requestIdSpan.style.marginTop = '3px';
+              requestIdSpan.textContent = `Request ID: ${nodeRequestIds[nodePath]}`;
+              const editBtn = item.querySelector('.edit-button');
+              if (editBtn) {
+                item.insertBefore(requestIdSpan, editBtn);
+              } else {
+                item.appendChild(requestIdSpan);
+              }
+            }
+          }
+          
+          // Add or update edit button
+          let editBtn = item.querySelector('.edit-button');
+          if (nodeValues[nodePath] !== undefined && !editBtn) {
+            editBtn = document.createElement('button');
+            editBtn.className = 'edit-button';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', () => openEditModal(nodePath));
+            item.appendChild(editBtn);
+          }
+        }
+      });
+    });
   }
   
   function renderNodeValueTree(tree, container, parentPath) {
