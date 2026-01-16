@@ -230,6 +230,7 @@
   const socket = io();
   const nodeValues = {}; // Track current values of subscribed nodes
   const nodeRequestIds = {}; // Track request IDs for each node
+  const expandedFolders = new Set(); // Track which folders are expanded
 
   socket.on('redis-message', ({ channel, message }) => {
     // Update activity log (right column)
@@ -377,12 +378,25 @@
         const childContainer = document.createElement('div');
         childContainer.className = 'tree-item collapsed';
         
+        // Check if this folder should be expanded
+        if (expandedFolders.has(currentPath)) {
+          childContainer.classList.remove('collapsed');
+          iconSpan.textContent = '▼';
+        }
+        
         // Click folder label to toggle expand/collapse
         folderLabel.addEventListener('click', (e) => {
           e.stopPropagation();
           const isCollapsed = childContainer.classList.contains('collapsed');
           childContainer.classList.toggle('collapsed');
           iconSpan.textContent = isCollapsed ? '▼' : '▶';
+          
+          // Track expanded/collapsed state
+          if (isCollapsed) {
+            expandedFolders.add(currentPath);
+          } else {
+            expandedFolders.delete(currentPath);
+          }
         });
         
         folderDiv.appendChild(folderLabel);
