@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Redis Subscriber 4</title>
+<title>Redis Subscriber</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
   body { font-family: monospace; padding: 20px; }
   .channel { margin-bottom: 10px; }
   .controls { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; }
+  .controls-layout { display: flex; gap: 20px; }
+  .discovery-column { flex: 1; }
+  .selection-column { flex: 1; }
   input { padding: 5px; font-family: monospace; width: 300px; }
   textarea { padding: 5px; font-family: monospace; width: 100%; min-height: 100px; }
   button { padding: 5px 15px; cursor: pointer; margin-right: 5px; }
@@ -176,19 +179,27 @@
 </style>
 </head>
 <body>
-<h1>Redis Subscriber 4</h1>
+<h1>Redis Subscriber</h1>
 
 <div class="controls">
   <!-- KEB Protocol Section (optional) -->
   <div class="section keb-nodes">
-    <label>KEB Node Discovery:</label>
-    <button id="discover-nodes">Discover Nodes</button>
-    <div id="discovered-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; display: none;"></div>
-    
-    <label for="nodes" style="margin-top: 15px;">Selected Nodes (one per line):</label>
-    <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then click to add from the list above"></textarea>
-    <button id="subscribe-nodes">Subscribe Nodes</button>
-    <button id="clear-nodes">Clear All Nodes</button>
+    <div class="controls-layout">
+      <div class="discovery-column">
+        <label>KEB Node Discovery:</label>
+        <button id="discover-nodes">Discover Nodes</button>
+        <div id="discovered-list" style="margin-top: 10px; max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; display: none;"></div>
+      </div>
+      
+      <div class="selection-column">
+        <label for="nodes">Selected Nodes (one per line):</label>
+        <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then click to add from the list above"></textarea>
+        <div style="margin-top: 10px;">
+          <button id="subscribe-nodes">Subscribe Nodes</button>
+          <button id="clear-nodes">Clear All Nodes</button>
+        </div>
+      </div>
+    </div>
   </div>
   
   <div class="status" id="status"></div>
