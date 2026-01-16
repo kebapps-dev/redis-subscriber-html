@@ -23,6 +23,12 @@ const redis = new Redis({
   port: REDIS_PORT
 });
 
+// Separate Redis client for publishing (since subscriber can't publish)
+const redisPublisher = new Redis({
+  host: REDIS_HOST,
+  port: REDIS_PORT
+});
+
 let currentPattern = '*';
 let kebProtocol = null;
 
@@ -79,6 +85,17 @@ io.on('connection', (socket) => {
         pattern: currentPattern,
         status: 'Error: ' + err.message
       });
+    }
+  });
+  
+  // Handle KEB Set publishing
+  socket.on('publish-keb-set', async (message) => {
+    try {
+      const messageStr = JSON.stringify(message);
+      await redisPublisher.publish('$kebSet', messageStr);
+      console.log(`Published to $kebSet: ${messageStr}`);
+    } catch (err) {
+      console.error('Failed to publish to $kebSet:', err);
     }
   });
   

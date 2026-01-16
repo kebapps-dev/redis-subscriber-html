@@ -52,6 +52,85 @@
     color: #0066cc;
     margin-left: 10px;
   }
+  .edit-button {
+    background: #2196F3;
+    color: white;
+    border: none;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-top: 5px;
+  }
+  .edit-button:hover {
+    background: #1976D2;
+  }
+  
+  /* Modal styles */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+  }
+  .modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 500px;
+    border-radius: 5px;
+  }
+  .modal-header {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+  }
+  .modal-body {
+    margin-bottom: 15px;
+  }
+  .modal-footer {
+    text-align: right;
+  }
+  .modal-input {
+    width: 100%;
+    padding: 8px;
+    font-family: monospace;
+    font-size: 14px;
+    margin-top: 5px;
+  }
+  .modal-label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+  }
+  .btn-primary {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .btn-primary:hover {
+    background: #45a049;
+  }
+  .btn-secondary {
+    background: #999;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+  .btn-secondary:hover {
+    background: #777;
+  }
   
   /* Tree view styles */
   .tree-container { font-family: monospace; }
@@ -114,9 +193,31 @@
   </div>
 </div>
 
+<!-- Edit Value Modal -->
+<div id="edit-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">Edit Node Value</div>
+    <div class="modal-body">
+      <label class="modal-label">Request ID:</label>
+      <input type="text" id="edit-request-id" class="modal-input" readonly>
+      
+      <label class="modal-label">Node Name:</label>
+      <input type="text" id="edit-node-name" class="modal-input" readonly>
+      
+      <label class="modal-label">New Value:</label>
+      <input type="text" id="edit-new-value" class="modal-input" placeholder="Enter new value">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-edit">Cancel</button>
+      <button class="btn-primary" id="save-edit">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const socket = io();
   const nodeValues = {}; // Track current values of subscribed nodes
+  const nodeRequestIds = {}; // Track request IDs for each node
 
   socket.on('redis-message', ({ channel, message }) => {
     // Update activity log (right column)
@@ -135,7 +236,20 @@
     const subscribedNodesList = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
     
     if (subscribedNodesList.includes(channel)) {
-      nodeValues[channel] = message;
+      // Store the request ID from the response
+      try {
+        const data = JSON.parse(message);
+        if (data.requestId) {
+          nodeRequestIds[channel] = data.requestId;
+        }
+        // Extract the actual value from the result object
+        if (data.result && data.result[channel] !== undefined) {
+          nodeValues[channel] = data.result[channel];
+        }
+      } catch (e) {
+        // If not JSON, just store the raw message
+        nodeValues[channel] = message;
+      }
       renderNodeValues();
     }
   }
@@ -162,10 +276,21 @@
       
       const valueSpan = document.createElement('div');
       valueSpan.className = 'node-value';
-      valueSpan.textContent = nodeValues[node] || 'waiting for data...';
+      const displayValue = nodeValues[node] !== undefined ? nodeValues[node] : 'waiting for data...';
+      valueSpan.textContent = `Value: ${displayValue}`;
       
       nodeDiv.appendChild(nameSpan);
       nodeDiv.appendChild(valueSpan);
+      
+      // Add edit button if we have data for this node
+      if (nodeValues[node] !== undefined) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-button';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', () => openEditModal(node));
+        nodeDiv.appendChild(editBtn);
+      }
+      
       container.appendChild(nodeDiv);
     });
   }
@@ -190,6 +315,66 @@
     document.getElementById('status').textContent = `Status: Subscribed - Pattern: ${pattern}`;
   });
 
+  // ============================================================================
+  // EDIT MODAL FUNCTIONALITY
+  // ============================================================================
+  function openEditModal(nodeName) {
+    const requestId = nodeRequestIds[nodeName] || '';
+    const currentValue = nodeValues[nodeName];
+    
+    document.getElementById('edit-request-id').value = requestId;
+    document.getElementById('edit-node-name').value = nodeName;
+    document.getElementById('edit-new-value').value = currentValue;
+    
+    document.getElementById('edit-modal').style.display = 'block';
+  }
+  
+  document.getElementById('cancel-edit').addEventListener('click', () => {
+    document.getElementById('edit-modal').style.display = 'none';
+  });
+  
+  document.getElementById('save-edit').addEventListener('click', () => {
+    const requestId = document.getElementById('edit-request-id').value;
+    const nodeName = document.getElementById('edit-node-name').value;
+    const newValueStr = document.getElementById('edit-new-value').value;
+    
+    // Parse the new value (try to detect if it's a number)
+    let newValue = newValueStr;
+    if (!isNaN(newValueStr) && newValueStr.trim() !== '') {
+      newValue = Number(newValueStr);
+    }
+    
+    // Construct the $kebSet message
+    const kebSetMessage = {
+      requestId: requestId,
+      args: {
+        [nodeName]: newValue
+      },
+      responseTopic: requestId
+    };
+    
+    // Emit to server to publish to Redis
+    socket.emit('publish-keb-set', kebSetMessage);
+    
+    // Log to activity
+    const div = document.createElement('div');
+    div.className = 'channel';
+    div.style.color = '#ff6600';
+    div.textContent = `$kebSet : ${JSON.stringify(kebSetMessage)}`;
+    document.getElementById('messages').prepend(div);
+    
+    // Close modal
+    document.getElementById('edit-modal').style.display = 'none';
+  });
+  
+  // Close modal when clicking outside
+  window.addEventListener('click', (event) => {
+    const modal = document.getElementById('edit-modal');
+    if (event.target === modal) {
+      modal.style.display = 'none';
+    }
+  });
+  
   // ============================================================================
   // OPTIONAL: KEB Protocol Client Code
   // ============================================================================
