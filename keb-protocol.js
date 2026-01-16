@@ -179,6 +179,27 @@ class KebProtocol {
         });
       }
     });
+    
+    // Handle individual node subscription
+    socket.on('subscribe-node', async (node) => {
+      try {
+        // Add to subscribed list if not already present
+        if (!this.subscribedNodes.includes(node)) {
+          this.subscribedNodes.push(node);
+        }
+        
+        // Publish individual subscription
+        const subscriptionMessage = JSON.stringify({
+          id: this.subscriptionId,
+          nodes: [node]
+        });
+        
+        await this.redisPublisher.publish('$kebSubscribe', subscriptionMessage);
+        console.log(`Published to $kebSubscribe: ${subscriptionMessage}`);
+      } catch (err) {
+        console.error(`Failed to subscribe to node ${node}:`, err);
+      }
+    });
   }
   
   /**

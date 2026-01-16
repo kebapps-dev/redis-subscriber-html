@@ -723,7 +723,10 @@
     const nodesText = document.getElementById('nodes').value;
     const nodes = nodesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
     if (nodes.length > 0) {
-      socket.emit('subscribe-nodes', nodes);
+      // Send individual subscribe request for each node
+      nodes.forEach(node => {
+        socket.emit('subscribe-node', node);
+      });
       // Clear old values and re-render
       Object.keys(nodeValues).forEach(key => delete nodeValues[key]);
       renderNodeValues();
