@@ -137,10 +137,29 @@
   .tree-item { margin-left: 15px; }
   .tree-folder { 
     cursor: pointer; 
-    padding: 3px; 
+    padding: 3px;
     user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
   }
   .tree-folder:hover { background-color: #e0e0e0; }
+  .tree-folder-label {
+    flex: 1;
+  }
+  .tree-folder-add-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .tree-folder-add-btn:hover {
+    background: #45a049;
+  }
   .tree-leaf { 
     cursor: pointer; 
     padding: 3px; 
@@ -160,12 +179,6 @@
 <h1>Redis Subscriber 4</h1>
 
 <div class="controls">
-  <div class="section">
-    <label for="pattern">Subscription Pattern:</label>
-    <input type="text" id="pattern" value="*" placeholder="e.g., c6c3_228.* or *">
-    <button id="subscribe-pattern">Subscribe Pattern</button>
-  </div>
-  
   <!-- KEB Protocol Section (optional) -->
   <div class="section keb-nodes">
     <label>KEB Node Discovery:</label>
@@ -173,7 +186,7 @@
     <div id="discovered-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; display: none;"></div>
     
     <label for="nodes" style="margin-top: 15px;">Selected Nodes (one per line):</label>
-    <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then select from the list above"></textarea>
+    <textarea id="nodes" placeholder="Click 'Discover Nodes' to find available nodes, then click to add from the list above"></textarea>
     <button id="subscribe-nodes">Subscribe Nodes</button>
     <button id="clear-nodes">Clear All Nodes</button>
   </div>
@@ -198,8 +211,7 @@
   <div class="modal-content">
     <div class="modal-header">Edit Node Value</div>
     <div class="modal-body">
-      <label class="modal-label">Request ID:</label>
-      <input type="text" id="edit-request-id" class="modal-input" readonly>
+      <input type="hidden" id="edit-request-id">
       
       <label class="modal-label">Node Name:</label>
       <input type="text" id="edit-node-name" class="modal-input" readonly>
@@ -288,43 +300,101 @@
       return;
     }
     
-    subscribedNodesList.forEach(node => {
-      const nodeDiv = document.createElement('div');
-      nodeDiv.className = 'node-item';
+    // Build tree structure from subscribed nodes
+    const tree = buildTree(subscribedNodesList);
+    const treeContainer = document.createElement('div');
+    treeContainer.className = 'tree-container';
+    renderNodeValueTree(tree, treeContainer, '');
+    container.appendChild(treeContainer);
+  }
+  
+  function renderNodeValueTree(tree, container, parentPath) {
+    // Sort keys alphabetically
+    const sortedKeys = Object.keys(tree).filter(key => !key.startsWith('_')).sort();
+    
+    sortedKeys.forEach(key => {
+      const node = tree[key];
+      const currentPath = parentPath ? `${parentPath}.${key}` : key;
       
-      const nameSpan = document.createElement('div');
-      nameSpan.className = 'node-name';
-      nameSpan.textContent = node;
-      
-      const valueSpan = document.createElement('div');
-      valueSpan.className = 'node-value';
-      const displayValue = nodeValues[node] !== undefined ? nodeValues[node] : 'waiting for data...';
-      valueSpan.textContent = `Value: ${displayValue}`;
-      
-      nodeDiv.appendChild(nameSpan);
-      nodeDiv.appendChild(valueSpan);
-      
-      // Add edit button if we have data for this node
-      if (nodeValues[node] !== undefined) {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'edit-button';
-        editBtn.textContent = 'Edit';
-        editBtn.addEventListener('click', () => openEditModal(node));
-        nodeDiv.appendChild(editBtn);
+      if (node._isLeaf) {
+        // Leaf node - display value and edit button
+        const nodeDiv = document.createElement('div');
+        nodeDiv.className = 'node-item';
+        nodeDiv.style.marginLeft = '0';
+        
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'node-name';
+        nameSpan.textContent = node._fullPath;
+        
+        const valueSpan = document.createElement('div');
+        valueSpan.className = 'node-value';
+        const displayValue = nodeValues[node._fullPath] !== undefined ? nodeValues[node._fullPath] : 'waiting for data...';
+        valueSpan.textContent = `Value: ${displayValue}`;
+        
+        nodeDiv.appendChild(nameSpan);
+        nodeDiv.appendChild(valueSpan);
+        
+        // Show request ID if available
+        if (nodeRequestIds[node._fullPath]) {
+          const requestIdSpan = document.createElement('div');
+          requestIdSpan.style.fontSize = '11px';
+          requestIdSpan.style.color = '#666';
+          requestIdSpan.style.marginTop = '3px';
+          requestIdSpan.textContent = `Request ID: ${nodeRequestIds[node._fullPath]}`;
+          nodeDiv.appendChild(requestIdSpan);
+        }
+        
+        // Add edit button if we have data for this node
+        if (nodeValues[node._fullPath] !== undefined) {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'edit-button';
+          editBtn.textContent = 'Edit';
+          editBtn.addEventListener('click', () => openEditModal(node._fullPath));
+          nodeDiv.appendChild(editBtn);
+        }
+        
+        container.appendChild(nodeDiv);
+      } else {
+        // Folder node
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'tree-folder';
+        folderDiv.style.marginBottom = '5px';
+        
+        const folderLabel = document.createElement('div');
+        folderLabel.className = 'tree-folder-label';
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'folder-icon';
+        iconSpan.textContent = '▶';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = key;
+        nameSpan.style.fontWeight = 'bold';
+        
+        folderLabel.appendChild(iconSpan);
+        folderLabel.appendChild(nameSpan);
+        
+        const childContainer = document.createElement('div');
+        childContainer.className = 'tree-item collapsed';
+        
+        // Click folder label to toggle expand/collapse
+        folderLabel.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isCollapsed = childContainer.classList.contains('collapsed');
+          childContainer.classList.toggle('collapsed');
+          iconSpan.textContent = isCollapsed ? '▼' : '▶';
+        });
+        
+        folderDiv.appendChild(folderLabel);
+        container.appendChild(folderDiv);
+        renderNodeValueTree(node, childContainer, currentPath);
+        container.appendChild(childContainer);
       }
-      
-      container.appendChild(nodeDiv);
     });
   }
 
   socket.on('subscription-status', ({ pattern, status }) => {
-    document.getElementById('status').textContent = `Status: ${status} - Pattern: ${pattern}`;
-  });
-
-  // Pattern subscription
-  document.getElementById('subscribe-pattern').addEventListener('click', () => {
-    const pattern = document.getElementById('pattern').value || '*';
-    socket.emit('change-pattern', pattern);
+    document.getElementById('status').textContent = `Status: ${status}`;
   });
 
   // Request current state on load
@@ -332,16 +402,20 @@
     socket.emit('get-current-pattern');
   });
 
-  socket.on('current-pattern', (pattern) => {
-    document.getElementById('pattern').value = pattern;
-    document.getElementById('status').textContent = `Status: Subscribed - Pattern: ${pattern}`;
-  });
-
   // ============================================================================
   // EDIT MODAL FUNCTIONALITY
   // ============================================================================
+  function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  
   function openEditModal(nodeName) {
-    const requestId = nodeRequestIds[nodeName] || '';
+    // Use existing request ID or generate a new one
+    const requestId = nodeRequestIds[nodeName] || generateUUID();
     const currentValue = nodeValues[nodeName];
     
     document.getElementById('edit-request-id').value = requestId;
@@ -428,7 +502,7 @@
     }
     
     listDiv.style.display = 'block';
-    listDiv.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Click nodes to add (double-click folders to add all):</div>';
+    listDiv.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Click nodes to add (click "+ All" on folders to add all):</div>';
     
     // Build tree structure
     const tree = buildTree(nodes);
@@ -462,8 +536,10 @@
   }
   
   function renderTree(tree, container, parentPath) {
-    Object.keys(tree).forEach(key => {
-      if (key.startsWith('_')) return; // Skip metadata keys
+    // Sort keys alphabetically
+    const sortedKeys = Object.keys(tree).filter(key => !key.startsWith('_')).sort();
+    
+    sortedKeys.forEach(key => {
       
       const node = tree[key];
       const currentPath = parentPath ? `${parentPath}.${key}` : key;
@@ -483,6 +559,9 @@
         const folderDiv = document.createElement('div');
         folderDiv.className = 'tree-folder';
         
+        const folderLabel = document.createElement('div');
+        folderLabel.className = 'tree-folder-label';
+        
         const iconSpan = document.createElement('span');
         iconSpan.className = 'folder-icon';
         iconSpan.textContent = '▶';
@@ -490,27 +569,33 @@
         const nameSpan = document.createElement('span');
         nameSpan.textContent = key;
         
-        folderDiv.appendChild(iconSpan);
-        folderDiv.appendChild(nameSpan);
+        folderLabel.appendChild(iconSpan);
+        folderLabel.appendChild(nameSpan);
+        
+        // Add button to subscribe all nodes in folder
+        const addBtn = document.createElement('button');
+        addBtn.className = 'tree-folder-add-btn';
+        addBtn.textContent = '+ All';
+        addBtn.title = 'Add all nodes in this folder';
+        addBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const leafNodes = getAllLeafNodes(node);
+          leafNodes.forEach(leafPath => addNodeToSubscription(leafPath));
+        });
         
         const childContainer = document.createElement('div');
         childContainer.className = 'tree-item collapsed';
         
-        // Single click to toggle expand/collapse
-        folderDiv.addEventListener('click', (e) => {
+        // Click folder label to toggle expand/collapse
+        folderLabel.addEventListener('click', (e) => {
           e.stopPropagation();
           const isCollapsed = childContainer.classList.contains('collapsed');
           childContainer.classList.toggle('collapsed');
           iconSpan.textContent = isCollapsed ? '▼' : '▶';
         });
         
-        // Double click to add all leaf nodes in this folder
-        folderDiv.addEventListener('dblclick', (e) => {
-          e.stopPropagation();
-          const leafNodes = getAllLeafNodes(node);
-          leafNodes.forEach(leafPath => addNodeToSubscription(leafPath));
-        });
-        
+        folderDiv.appendChild(folderLabel);
+        folderDiv.appendChild(addBtn);
         container.appendChild(folderDiv);
         renderTree(node, childContainer, currentPath);
         container.appendChild(childContainer);
@@ -537,9 +622,10 @@
   
   function addNodeToSubscription(nodePath) {
     const currentNodes = document.getElementById('nodes').value;
-    const nodeList = currentNodes ? currentNodes.split('\n') : [];
+    const nodeList = currentNodes ? currentNodes.split('\n').map(n => n.trim()).filter(n => n) : [];
     if (!nodeList.includes(nodePath)) {
       nodeList.push(nodePath);
+      nodeList.sort(); // Alphabetize
       document.getElementById('nodes').value = nodeList.join('\n');
     }
   }
@@ -559,6 +645,7 @@
 
   socket.on('subscribed-nodes', (nodes) => {
     if (nodes.length > 0) {
+      nodes.sort(); // Alphabetize
       document.getElementById('nodes').value = nodes.join('\n');
       renderNodeValues();
     }
